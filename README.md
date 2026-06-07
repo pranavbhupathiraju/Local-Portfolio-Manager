@@ -1,23 +1,23 @@
-# 🌅 Local Portfolio Manager & Market Intelligence Agent
+# Local Portfolio Manager Agent
 
-A high-velocity, internship-optimized terminal assistant designed to eliminate daily market noise and provide an instant, data-driven pre-market execution brief. By coupling a native Python data pipeline with a localized Large Language Model (LLM), this agent cuts through public clickbait headlines, evaluates underlying corporate actions, and delivers actionable portfolio verdicts entirely locally on your machine.
+A local AI-powered assistant designed to provide an instant, data-driven pre-market breifing on your stock holdings and watchlist. By coupling a native Python data pipeline with a localized Large Language Model, this agent is designed too deliver actionable portfolio verdicts entirely locally on your machine.
 
 ---
 
-## 🎯 The Use Case: Internship-Optimized Workflow
+##  Why did I make this?
 
-During a high-intensity professional environment (like a summer corporate internship), capital managers lack the time to open dozens of tabs, parse raw regulatory filings, or look through individual asset charts before the opening bell. 
+Upon starting my internship I realized quickly that investors lack the time to read through news, analyze charts and do other tasks that represent the bare minimum when managing a self-run investment portfolio.
 
-Most consumer-facing retail stock market trackers rely heavily on financial news headline aggregators. These headlines are engineered for click-through rates (CTR) rather than alphabetic insights. They use open-ended, emotional hooks that mislead traditional sentiment models.
+Most retail stock market trackers rely heavily on financial news headline aggregators. These headlines tend to be engineered for click-through rates rather than actual insight. They use open-ended, emotional hooks that mislead many traditional sentiment analyzing models.
 
 **This Agent solves the problem by:**
-* **Eliminating Scraper Noise:** It strips out clickbait hooks and isolates the underlying corporate development body text.
+* **Eliminating Scraper Noise:** It strips out clickbait hooks and isolates the underlying summary body text.
 * **Tracking "Smart Money" Anchors:** It tracks actual structural signals: Form 4 executive insider buying/selling trends, 13F hedge fund concentration, and short interest parameters.
 * **10-Second Time-to-Awareness:** It synthesizes raw data streams into a single high-impact **Executive Briefing Matrix** right at the top of your morning dashboard file. If an asset registers no material structural variance, it compresses it into a single line, allowing you to prioritize critical risk items instantly.
 
 ---
 
-## 🏗️ Technical Architecture Breakdown
+## Technical Architecture Breakdown
 
 The engine shifts away from broad single-prompt dumps—which easily overwhelm small local neural pathways—and implements a decoupled, sequential extraction loop.
 
@@ -48,15 +48,15 @@ Spreads (Low/High)  & 13F Concentrations Summary Bodies
               [ ~/Desktop/daily_dashboard.md ]
 ```
 
-### 🧠 Core Architectural Implementations
+### Architectural Implementations
 
-1. **Sequential Single-Ticker Isolation (MapReduce Design):** Handing multiple assets to a small language model simultaneously causes severe context-window dilution and variable hallucinations. This agent queries the API, extracts the data matrix, and executes inference for **exactly one ticker at a time**. This guarantees 100% of the model's focus is dedicated to the core asset profile before moving to the next block.
+1. **Sequential Single-Ticker Isolation (MapReduce Design):** Handing multiple assets to a small language model simultaneously causes context-window dilution and variable hallucinations. This agent queries the API, extracts the data matrix, and executes inference for **exactly one ticker at a time**. This guarantees 100% of the model's focus is dedicated to the core asset profile before moving to the next block.
 2. **Consensus Target Boundaries:** Price movements are relative to valuation limits. The agent maps out Wall Street's Low, Median, and High target ranges, calculating the exact location percentage of current pricing to anchor its execution verdicts.
-3. **Automated macOS State Recovery Execution:** Scheduled natively via operating system calendar configurations, the execution architecture handles system sleep states elegantly. If the computer is closed during the target execution time, macOS queues the background daemon, firing the pipeline and refreshing the desktop file within 15 seconds of logging back into your profile.
+3. **Automated macOS State Recovery Execution:** Scheduled natively via operating system calendar configurations, the execution architecture handles system sleep states smoothly. If the computer is closed/off during the target execution time, macOS queues the background daemon, firing the pipeline and refreshing the desktop file within 15 seconds of logging back in.
 
 ---
 
-## 🛠️ Installation & Setup Tutorial
+## Installation & Setup Tutorial
 
 Follow these exact steps to clone, configure, and execute the automated intelligence infrastructure locally on your machine.
 
@@ -115,7 +115,7 @@ Open `config.json` in your code editor and map out your core portfolio allocatio
 
 ---
 
-## 🏃‍♂️ Usage & Automated Execution Options
+## Usage & Automated Execution Options
 
 ### Manual High-Velocity Run
 To manually execute the scraping pipelines and instantly compile your pre-market executive brief on your laptop Desktop, run:
@@ -167,4 +167,4 @@ When you open `daily_dashboard.md` on your Desktop, you are met with a structure
 ## 🛡️ License & Disclaimers
 This repository is configured entirely for personal software engineering portfolio demonstration and capital monitoring automation uses. 
 
-**Disclaimer:** This software is an experimental local AI data parsing tool. None of the compiled automated output, evaluation vectors, or inferred execution statuses represent official financial, legal, or investment advice. Always double-check raw institutional filings independently.
+**Disclaimer:** This software is an experimental local AI data parsing tool. None of the compiled automated output, evaluation vectors, or inferred execution statuses represent official financial, legal, or investment advice. Always double-check raw institutional filings independently. Always double check claims and do not use the outputs of this agent/project as advice or in a suggestive manner in any regard.
