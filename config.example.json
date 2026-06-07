@@ -1,0 +1,14 @@
+{
+    "PORTFOLIO": {
+        "free_cash": 0.00,
+        "positions": {
+            "TICKER1": {"shares": 0, "avg_cost": 0.00},
+            "TICKER2": {"shares": 0, "avg_cost": 0.00}
+        }
+    },
+    "RISK_PROFILE": {
+        "tolerance": "Your risk tolerance here",
+        "philosophy": "Your trading strategy philosophy here",
+        "goals": "Your specific investment targets"
+    }
+}

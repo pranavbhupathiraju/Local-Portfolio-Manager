@@ -1,0 +1,10 @@
+# Ignore the private trading configuration data
+config.json
+
+# Ignore the daily generated markdown outputs
+daily_dashboard.md
+
+# Ignore the Python virtual environment folder
+trading_env/
+__pycache__/
+*.pyc
