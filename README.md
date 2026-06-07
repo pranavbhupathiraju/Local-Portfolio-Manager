@@ -1,6 +1,6 @@
 # Local Portfolio Manager Agent
 
-A local AI-powered assistant designed to provide an instant, data-driven pre-market breifing on your stock holdings and watchlist. By coupling a native Python data pipeline with a localized Large Language Model, this agent is designed too deliver actionable portfolio verdicts entirely locally on your machine.
+A local AI-powered assistant designed to provide an instant, data-driven pre-market breifing on your stock holdings and watchlist. This agent is designed too deliver actionable portfolio verdicts entirely locally on your machine.
 
 ---
 
