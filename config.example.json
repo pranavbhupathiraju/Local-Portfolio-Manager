@@ -6,6 +6,7 @@
             "TICKER2": {"shares": 0, "avg_cost": 0.00}
         }
     },
+    "WATCHLIST": ["XXX", "YYY"],
     "RISK_PROFILE": {
         "tolerance": "Your risk tolerance here",
         "philosophy": "Your trading strategy philosophy here",

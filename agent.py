@@ -2,126 +2,146 @@ import ollama
 import yfinance as yf
 import pandas as pd
 import feedparser
-import json  # <-- Added standard library to parse JSON
+import json
 import os
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 from datetime import datetime
 
-# Initialize local NLP sentiment analyzer
 sia = SentimentIntensityAnalyzer()
 
 # ==========================================
-# 1. DYNAMIC SECURE CONFIGURATION LOADER
+# 1. DATA & SECURITY CONFIG LOADER
 # ==========================================
 def load_secure_config():
-    """Loads private portfolio configuration details dynamically from local storage."""
-    config_path = "config.json"
-    
-    if not os.path.exists(config_path):
-        raise FileNotFoundError(
-            "CRITICAL ERROR: 'config.json' not found! Please create it locally. "
-            "Refer to config.example.json for the correct formatting structure."
-        )
-        
-    with open(config_path, "r") as f:
+    with open("config.json", "r") as f:
         return json.load(f)
 
-# Load data dynamically into the execution context
 CONFIG = load_secure_config()
 PORTFOLIO = CONFIG["PORTFOLIO"]
+WATCHLIST = CONFIG["WATCHLIST"]
 RISK_PROFILE = CONFIG["RISK_PROFILE"]
 
 # ==========================================
-# 2. UPGRADED NEWS & NLP PIPELINE (Keeps identical to your prior script)
+# 2. ADVANCED DATA PROCESSING PIPELINE
 # ==========================================
-
-def get_stock_news_and_sentiment(ticker):
-    """Fetches real-time RSS news headlines and runs local NLP sentiment analysis."""
+def analyze_news_sentiment(ticker):
+    """Aggregates RSS news feed metrics into a dense headline profile and sentiment velocity."""
     rss_url = f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={ticker}&region=US&lang=en-US"
     feed = feedparser.parse(rss_url)
     
-    analyzed_headlines = []
+    headlines = []
+    total_score = 0
+    count = 0
     
-    # Process the top 4 latest live headlines
-    for entry in feed.entries[:4]:
+    for entry in feed.entries[:5]:
         title = entry.title
-        # Calculate local NLP scores (-1.0 to +1.0)
-        scores = sia.polarity_scores(title)
-        compound = scores['compound']
+        score = sia.polarity_scores(title)['compound']
+        total_score += score
+        count += 1
+        headlines.append(f"- {title} (Score: {score:.2f})")
         
-        # Classify the sentiment based on standard VADER thresholds
-        if compound >= 0.05:
-            sentiment = "POSITIVE 🟩"
-        elif compound <= -0.05:
-            sentiment = "NEGATIVE 🟥"
-        else:
-            sentiment = "NEUTRAL 🟨"
-            
-        analyzed_headlines.append(f"'{title}' ({sentiment} | Score: {compound:.2f})")
-        
-    return analyzed_headlines if analyzed_headlines else ["No recent major RSS headlines found."]
+    avg_sentiment = total_score / count if count > 0 else 0.0
+    return {"headlines": "\n".join(headlines), "avg_sentiment": avg_sentiment}
 
-def fetch_market_context(ticker):
-    """Gathers dense market metrics and combines them with NLP news metrics."""
+def calculate_composite_setup(ticker):
+    """
+    Computes an Asymmetric Edge Score (AES) from 0 to 100 based on structure.
+    Balances distance to moving averages, recent volatility, and news momentum.
+    """
     try:
         stock = yf.Ticker(ticker)
-        info = stock.info
+        # Fetch historical daily data for tracking structural moves
+        hist = stock.history(period="60d")
+        if hist.empty: return None
         
-        price = info.get("currentPrice" if "currentPrice" in info else "regularMarketPrice", 0)
-        sma_50 = info.get("fiftyDayAverage", 0)
-        sma_200 = info.get("twoHundredDayAverage", 0)
+        current_price = hist['Close'].iloc[-1]
+        sma_50 = hist['Close'].rolling(window=50).mean().iloc[-1]
         
-        # Hit our new RSS + NLP pipeline
-        headlines_with_sentiment = get_stock_news_and_sentiment(ticker)
+        # 1. Volume Accumulation Check
+        avg_vol = hist['Volume'].tail(20).mean()
+        recent_vol = hist['Volume'].iloc[-1]
+        volume_multiplier = recent_vol / avg_vol if avg_vol > 0 else 1.0
         
+        # 2. News Catalyst Check
+        news = analyze_news_sentiment(ticker)
+        
+        # 3. Structural Setup Scoring Algorithm
+        score = 50 # Base neutral score
+        
+        # Add score if pulling back cleanly toward institutional support (50 MA) without breaking it
+        if current_price > sma_50 and (current_price / sma_50) < 1.05:
+            score += 20  # Strong structural location
+        elif current_price < sma_50:
+            score -= 20  # Under water / Overhead resistance heavy
+            
+        # Add score if volume expands on massive accumulation
+        if volume_multiplier > 1.5 and hist['Close'].iloc[-1] > hist['Open'].iloc[-1]:
+            score += 15
+            
+        # Add score for positive sentiment velocity
+        if news['avg_sentiment'] > 0.2:
+            score += 15
+        elif news['avg_sentiment'] < -0.2:
+            score -= 25
+            
         return {
-            "current_price": price,
-            "sma_50": sma_50,
-            "sma_200": sma_200,
-            "news_analysis": headlines_with_sentiment
+            "price": current_price,
+            "score": max(0, min(100, score)), # Clamp score between 0 and 100
+            "volume_mult": volume_multiplier,
+            "news_summary": news['headlines'],
+            "avg_sentiment": news['avg_sentiment']
         }
     except Exception as e:
-        return {"current_price": 0, "sma_50": 0, "sma_200": 0, "news_analysis": [f"Pipeline Error: {str(e)}"]}
+        return None
 
 # ==========================================
-# 3. AGENT ORCHESTRATION ENGINE
+# 3. EXECUTIVE REASONING ENGINE
 # ==========================================
-def generate_morning_briefing():
-    print("🤖 Scraping live RSS feeds, running local NLP sentiment, and prompting Ollama...")
+def generate_executive_dashboard():
+    print("🧠 Sifting through market structure and running catalyst filters...")
     
-    portfolio_summary = ""
+    portfolio_input = ""
     for ticker, details in PORTFOLIO["positions"].items():
-        ctx = fetch_market_context(ticker)
-        current_val = ctx['current_price'] * details['shares']
-        pnl = (ctx['current_price'] - details['avg_cost']) * details['shares']
+        analysis = calculate_composite_setup(ticker)
+        if not analysis: continue
         
-        portfolio_summary += f"""
-        - Ticker: {ticker}
-          Current Price: ${ctx['current_price']:.2f} | Avg Cost: ${details['avg_cost']:.2f}
-          Total Value: ${current_val:,.2f} | Unrealized PnL: ${pnl:,.2f}
-          Technicals: 50MA: ${ctx['sma_50']:.2f} | 200MA: ${ctx['sma_200']:.2f}
-          Processed News Feed:
-          * {chr(10).join(ctx['news_analysis'])}
+        pnl = (analysis['price'] - details['avg_cost']) * details['shares']
+        portfolio_input += f"""
+        TICKER: {ticker} (Position Size: {details['shares']} shares | PnL: ${pnl:,.2f})
+        Current Price: ${analysis['price']:.2f}
+        News Catalyst Profile:\n{analysis['news_summary']}
+        """
+
+    watchlist_input = ""
+    for ticker in WATCHLIST:
+        analysis = calculate_composite_setup(ticker)
+        if not analysis: continue
+        
+        watchlist_input += f"""
+        TICKER: {ticker}
+        Composite Asymmetry Score: {analysis['score']}/100 (Volume Momentum: {analysis['volume_mult']:.2f}x)
+        News Sentiment Context Score: {analysis['avg_sentiment']:.2f}
+        Latest Context:\n{analysis['news_summary']}
         """
 
     system_prompt = f"""
-    You are an elite, concise quantitative trading assistant. Your task is to output a scannable Pre-Market Intelligence Dashboard.
-    You are provided with raw mathematical data and news titles that have ALREADY been evaluated by a local NLP engine for sentiment.
+    You are a completely blunt, high-conviction personal portfolio risk manager. Your objective is to save the trader time by slashing market noise and delivering strict macro situational awareness.
     
-    User Context:
-    - Philosophy: {RISK_PROFILE['philosophy']}
-    - Risk Stance: {RISK_PROFILE['tolerance']}
-    Current Cash Available: ${PORTFOLIO['free_cash']:,}
+    You follow this protocol:
+    - For Core Portfolio Holdings: Actively search for underlying threats, major technical damage, or key structural catalysts. Skip general price summaries.
+    - For Watchlist Tickers: Evaluate the Composite Asymmetry Score. If a score is exceptionally high (> 75), outline the tactical entry setup. If the score is low or mediocre (< 70), explicitly tell the user to "Fuck off and wait for a cleaner setup," explaining exactly why the current environment lacks an edge.
+    
+    Style Directives: Raw, hyper-concise, analytical, zero corporate fluff. Use markdown layout formatting.
     """
 
     user_prompt = f"""
-    Analyze the raw portfolio data and NLP sentiment summaries below. Synthesize everything into a clean markdown dashboard with exactly these three bold headers:
-    1. 🚨 **Risk & Breakdown Alerts** (Flag positions if price breaks below MAs or if the NLP score highlights consistent NEGATIVE headlines)
-    2. 🎯 **Asymmetric Setups** (Look for technical setups or positive sentiment momentum that aligns with the strategy)
-    3. 📊 **Capital Allocation Blueprint** (Provide dynamic instructions on cash deployment based on current market signals)
-
-    Data Input:
-    {portfolio_summary}
+    Process these current market metrics and news catalogs into an executive pre-market briefing.
+    
+    ### Core Positions Catalyst Review:
+    {portfolio_input}
+    
+    ### Watchlist Filtering & Tactical Setup Scan:
+    {watchlist_input}
     """
 
     response = ollama.chat(
@@ -132,7 +152,7 @@ def generate_morning_briefing():
         ]
     )
     
-    markdown_output = f"""# 🌅 Pre-Market Trading Dashboard
+    dashboard_output = f"""# 🌅 High-Conviction Intelligence Dashboard
 *Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*
 
 ---
@@ -141,9 +161,9 @@ def generate_morning_briefing():
 """
     
     with open("daily_dashboard.md", "w") as f:
-        f.write(markdown_output)
+        f.write(dashboard_output)
         
-    print("\n🎯 Dashboard updated successfully with live NLP data!")
+    print("\n🎯 Executive briefing compiled! Check daily_dashboard.md.")
 
 if __name__ == "__main__":
-    generate_morning_briefing()
+    generate_executive_dashboard()
