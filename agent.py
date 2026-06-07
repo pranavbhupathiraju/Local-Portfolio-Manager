@@ -3,13 +3,10 @@ import yfinance as yf
 import pandas as pd
 import json
 import os
-from nltk.sentiment.vader import SentimentIntensityAnalyzer
 from datetime import datetime
 
-sia = SentimentIntensityAnalyzer()
-
 # ==========================================
-# 1. DATA CONFIGURATION LOADER
+# 1. SECURE CONFIGURATION LOADER
 # ==========================================
 def load_secure_config():
     with open("config.json", "r") as f:
@@ -18,184 +15,179 @@ def load_secure_config():
 CONFIG = load_secure_config()
 PORTFOLIO = CONFIG["PORTFOLIO"]
 WATCHLIST = CONFIG["WATCHLIST"]
-RISK_PROFILE = CONFIG["RISK_PROFILE"]
 
 # ==========================================
-# 2. DEEP DATA & CATALYST PIPELINE
+# 2. RAW INSTITUTIONAL PIPELINE
 # ==========================================
 def fetch_ticker_intelligence(ticker):
-    """
-    Extracts deep consensus valuation metrics (Low/Base/High cases),
-    fixes news parsing boundaries, and structures clear context variables.
-    """
+    """Extracts raw pricing metrics, smart money density, and anti-clickbait summaries."""
     try:
         stock = yf.Ticker(ticker)
         info = stock.info
         
-        # Historical price metrics for tracking momentum vectors
-        hist = stock.history(period="5d")
-        if hist.empty: return None
-        
-        current_price = hist['Close'].iloc[-1]
-        prev_close = hist['Close'].iloc[-2] if len(hist) > 1 else current_price
-        
-        daily_perf = ((current_price - prev_close) / prev_close) * 100
-        
-        # Categorize immediate price shocks
-        if daily_perf >= 3.5: price_shock = f"💥 PARABOLIC SURGE (+{daily_perf:.2f}%)"
-        elif daily_perf <= -3.5: price_shock = f"🩸 SEVERE DROP ({daily_perf:.2f}%)"
-        else: price_shock = f"⚖️ Normal Volatility Noise ({daily_perf:.2f}%)"
+        current_price = info.get("currentPrice") or info.get("regularMarketPrice", 0)
+        if not current_price:
+            hist = stock.history(period="1d")
+            current_price = hist['Close'].iloc[-1] if not hist.empty else 0
 
-        # Extract Valuation Anchors (Low / Median / High Wall Street cases)
+        # Wall Street Valuation Spread
         target_low = info.get("targetLowPrice")
         target_base = info.get("targetMedianPrice") or info.get("targetMeanPrice")
         target_high = info.get("targetHighPrice")
-        forward_pe = info.get("forwardPE")
-        trailing_pe = info.get("trailingPE")
         
-        valuation_context = f"- **Current Price:** ${current_price:.2f} | **Forward P/E:** {f'{forward_pe:.1f}x' if forward_pe else 'N/A'} | **Trailing P/E:** {f'{trailing_pe:.1f}x' if trailing_pe else 'N/A'}\n"
-        if target_low and target_base and target_high:
+        valuation_context = f"Price: ${current_price:.2f} | "
+        if target_low and target_high:
             total_range = target_high - target_low
             current_pct = ((current_price - target_low) / total_range) * 100 if total_range > 0 else 0
-            valuation_context += f"  - **Wall Street Targets:** Low: ${target_low:.2f} | Base: ${target_base:.2f} | High: ${target_high:.2f}\n"
-            valuation_context += f"  - **Range Location:** Price is sitting at the **{current_pct:.1f}%** mark of the consensus target range."
+            valuation_context += f"WallSt Ranges -> Low: ${target_low:.2f} | Base: ${target_base:.2f} | High: ${target_high:.2f} (Sitting at {current_pct:.1f}% mark of range)."
         else:
-            valuation_context += "  - **Wall Street Targets:** Forward target spectrum unavailable for this ticker."
+            valuation_context += "Wall Street Target spectrum unavailable."
 
-        # FIXED NEWS PARSING ENGINE (Navigating yfinance payload structural updates)
+        # Hedge Fund Concentration (13F) & Short Interest
+        held_by_insiders = info.get("heldPercentInsiders", 0) * 100 if info.get("heldPercentInsiders") else 0
+        held_by_institutions = info.get("heldPercentInstitutions", 0) * 100 if info.get("heldPercentInstitutions") else 0
+        shares_short = info.get("shortPercentOfFloat", 0) * 100 if info.get("shortPercentOfFloat") else 0
+        
+        institutional_context = f"Insider Hold: {held_by_insiders:.2f}% | Hedge Fund Hold: {held_by_institutions:.2f}% | Short Interest Float: {shares_short:.2f}%"
+
+        # Executive Insider Actions (Form 4)
+        try:
+            insider_tx = stock.get_insider_transactions()
+            if insider_tx is not None and not insider_tx.empty:
+                recent_tx = insider_tx.head(3)
+                tx_list = [f"Trans: {row.get('Text')} | Shares: {row.get('Shares')} | Title: {row.get('Insider_Position')}" for _, row in recent_tx.iterrows()]
+                insider_summary = " & ".join(tx_list)
+            else:
+                insider_summary = "No material insider tracking registered in this window."
+        except:
+            insider_summary = "Insider tracking registry offline."
+
+        # Content Summary Extraction (Anti-Clickbait Engine)
         news_stream = stock.news
-        catalysts = []
-        sentiment_scores = []
-        
-        # Keywords determining high-impact macro shifts
-        target_keywords = ["target", "upgrade", "downgrade", "partnership", "deal", "earnings", "guidance", "acquisition", "insider", "sell", "buy"]
-        
-        for item in news_stream[:6]:
-            # DRILL DEEP: Try new payload location, fall back to root
+        deep_news_payload = []
+        for item in news_stream[:3]:
             title = item.get('content', {}).get('title') or item.get('title', '')
             summary = item.get('content', {}).get('summary') or item.get('summary', '')
-            
-            if not title:
-                continue
-                
-            combined_text = f"{title} {summary}".lower()
-            
-            # Execute local NLTK processing on non-empty strings
-            score = sia.polarity_scores(title)['compound']
-            sentiment_scores.append(score)
-            
-            tag = "🔹 [NEWS]"
-            if any(k in combined_text for k in ["target", "upgrade", "downgrade"]):
-                tag = "🎯 [ANALYST ACTION]"
-            elif any(k in combined_text for k in ["partnership", "deal", "acquisition"]):
-                tag = "🤝 [STRATEGIC CATALYST]"
-            elif any(k in combined_text for k in ["earnings", "guidance"]):
-                tag = "📊 [FUNDAMENTAL SHIFT]"
+            if title:
+                body = summary if len(summary) > 20 else "No summary details."
+                deep_news_payload.append(f"[{title} -> Detail Fact: {body}]")
+        news_summary = " | ".join(deep_news_payload) if deep_news_payload else "No major news updates."
 
-            catalysts.append(f"  {tag} {title} (Sentiment Vane: {score:.2f})")
-
-        avg_sentiment = sum(sentiment_scores) / len(sentiment_scores) if sentiment_scores else 0.0
-        if avg_sentiment >= 0.10: refined_sentiment = "Bullish Sentiment Accel 🟩"
-        elif avg_sentiment <= -0.10: refined_sentiment = "Bearish Distress Overhang 🟥"
-        else: refined_sentiment = "Mixed/Horizontal Noise 🟨"
-
-        return {
-            "price_shock": price_shock,
-            "valuation_context": valuation_context,
-            "refined_sentiment": f"{refined_sentiment} (Index: {avg_sentiment:.2f})",
-            "catalysts": "\n".join(catalysts) if catalysts else "  No explicit fundamental milestones isolated in this news cycle."
-        }
+        return f"""
+        * VALUATION SPREAD: {valuation_context}
+        * INSTITUTIONAL CONCENTRATION: {institutional_context}
+        * RECENT FORM 4 INSIDER MOVES: {insider_summary}
+        * UNFILTERED ARTICLE CORPORATE FACTS: {news_summary}
+        """
     except Exception as e:
+        print(f"Error compiling {ticker}: {str(e)}")
         return None
+
 # ==========================================
-# 3. HIGH-VELOCITY REASONING ENGINE (UPGRADED)
+# 3. HIGH-VELOCITY REASONING ENGINE
 # ==========================================
-def query_local_brain(ticker, block_type, data_stream):
-    """Feeds Ollama exactly ONE stock at a time to prevent token confusion and maximize depth."""
+def query_local_brain(ticker, data_stream):
+    """Executes hyper-dense individual ticker assessment."""
+    system_prompt = """
+    You are an ironclad equity risk officer. Your target reader is a busy summer corporate intern who has exactly 10 seconds to screen their portfolio. 
     
-    system_prompt = f"""
-    You are an expert, brutally honest institutional equity research analyst. Your primary goal is to save a high-conviction trader time by aggressively cutting out fluff and identifying structural anomalies.
+    YOUR UNBENDING ANALYSIS PROTOCOL:
+    1. Cross-reference pricing against target limits. If price is near the ceiling and executive insiders are selling, trigger an alert.
+    2. Read news details for operational data. Ignore headline clickbait completely.
+    3. Output EXACTLY two single-sentence bullet lines for the stock. No introduction, no conversational text, no corporate disclaimers.
     
-    YOUR PROTOCOL:
-    1. Look at the Price Shocks and Valuation Location. Evaluate if the stock has run completely parabolic into its high-case target ceiling (signaling a dangerous overextended entry point) or if it's dropping into its low-case valuation floor.
-    2. Sift through the Catalyst stream. Isolate concrete structural shifts: analyst target revisions, strategic corporate partnerships, or fundamental guidance changes.
-    3. Be completely direct. If it's a watchlist item, weigh the valuation range against recent sentiment velocity. Give an explicit, unmistakable verdict: either map out the asymmetric entry playbook, or explicitly tell them to "Sit tight, don't chase, or fuck off and wait for a pullback," detailing exactly why the current positioning lacks a statistical edge.
-    
-    Style: Raw, data-driven, analytical, completely blunt, zero generic filler. Use clean Markdown headers.
+    EXACT OUTPUT TEMPLATE FORMAT:
+    - **Synthesis**: [1-sentence dense fundamental evaluation of insider, institutional, and structural data alignment]
+    - **Verdict**: [State either 🟩 **[BUY/ACCUMULATE]**, 🟥 **[SELL/TRIM RISK]**, or 🟨 **[HOLD / DO NOTHING]** followed by a 1-sentence blunt technical reason why]
     """
-
-    user_prompt = f"""
-    Perform a deep, granular review on this specific {block_type} target: **{ticker}**.
-    Focus heavily on pulling out partnerships, analyst target changes, structural price drops/surges, and current cycle location.
-
-    RAW PIPELINE INPUTS FOR {ticker}:
-    {data_stream}
-    """
-
     try:
         response = ollama.chat(
             model='llama3.2',
             messages=[
                 {'role': 'system', 'content': system_prompt},
-                {'role': 'user', 'content': user_prompt}
+                {'role': 'user', 'content': f"Analyze ticker data matrix for {ticker}:\n{data_stream}"}
             ]
         )
-        return response['message']['content']
+        return response['message']['content'].strip()
     except Exception as e:
-        return f"### {ticker}\nError executing local LLM inference: {str(e)}"
+        return f"- **Error**: Local model inference failed ({str(e)})"
 
-def generate_executive_dashboard():
-    print("⚡ Cracking nested news structures, mapping valuation spreads...")
+def generate_global_matrix(ticker_reports):
+    """Assembles all ticker verdicts into a high-impact, single-glance dashboard panel."""
+    system_prompt = """
+    You are a high-speed intelligence compilation officer. Your job is to read individual stock analyst reports and combine them into a single, compact Executive Morning Alert box.
     
-    compiled_reports = []
+    CRITICAL COMPRESS RULE:
+    Extract only the stock symbol and its execution verdict emoji block. Group them clearly into three exact lists inside a clean markdown layout block:
+    * 🛑 CRITICAL ACTION REQUIRED (List any stocks flagged as BUY or SELL)
+    * ⚖️ STEADY POSITIONING STATE (List any stocks flagged as HOLD / DO NOTHING)
+    
+    Keep it completely brief. No conversational intro or outro.
+    """
+    try:
+        response = ollama.chat(
+            model='llama3.2',
+            messages=[
+                {'role': 'system', 'content': system_prompt},
+                {'role': 'user', 'content': f"Synthesize these ticker files into the matrix:\n{ticker_reports}"}
+            ]
+        )
+        return response['message']['content'].strip()
+    except:
+        return "### ⚠️ Morning Briefing Matrix Generation Error"
 
-    # Process Core Positions Individually
-    for ticker, details in PORTFOLIO["positions"].items():
-        print(f" 📦 Analyzing Core Holding: {ticker}")
-        intel = fetch_ticker_intelligence(ticker)
-        if not intel: continue
-        
-        raw_stream = f"""
-        - Immediate Vector: {intel['price_shock']}
-        - Valuation Matrix: {intel['valuation_context']}
-        - Refined Sentiment: {intel['refined_sentiment']}
-        - Active Catalyst Stream:
-        {intel['catalysts']}
-        """
-        
-        report = query_local_brain(ticker, "Core Portfolio Holding", raw_stream)
-        compiled_reports.append(f"## 📈 Core Holding: {ticker}\n{report}\n\n---")
+# ==========================================
+# 4. CONTROL SYSTEM DISPATCHER
+# ==========================================
+def generate_executive_dashboard():
+    print("⚡ Fetching fundamental coordinates and executing local inference...")
+    
+    raw_reports_dump = []
+    portfolio_output = ""
+    watchlist_output = ""
 
-    # Process Watchlist Tickers Individually
+    for ticker in PORTFOLIO["positions"].keys():
+        print(f" 📦 Ingesting Core Asset: {ticker}")
+        data_stream = fetch_ticker_intelligence(ticker)
+        if not data_stream: continue
+        analysis = query_local_brain(ticker, data_stream)
+        raw_reports_dump.append(f"Asset: {ticker} | Report:\n{analysis}")
+        portfolio_output += f"### 📈 {ticker}\n{analysis}\n\n"
+
     for ticker in WATCHLIST:
-        print(f" 🔭 Analyzing Watchlist Target: {ticker}")
-        intel = fetch_ticker_intelligence(ticker)
-        if not intel: continue
-        
-        raw_stream = f"""
-        - Immediate Vector: {intel['price_shock']}
-        - Valuation Matrix: {intel['valuation_context']}
-        - Refined Sentiment: {intel['refined_sentiment']}
-        - Active Catalyst Stream:
-        {intel['catalysts']}
-        """
-        
-        report = query_local_brain(ticker, "Watchlist Target", raw_stream)
-        compiled_reports.append(f"## 🔭 Watchlist Element: {ticker}\n{report}\n\n---")
+        print(f" 🔭 Ingesting Watchlist Target: {ticker}")
+        data_stream = fetch_ticker_intelligence(ticker)
+        if not data_stream: continue
+        analysis = query_local_brain(ticker, data_stream)
+        raw_reports_dump.append(f"Asset: {ticker} | Report:\n{analysis}")
+        watchlist_output += f"### 🔭 {ticker}\n{analysis}\n\n"
 
-    # Combine all individual dense reports into the final daily dashboard
-    final_dashboard_content = f"""# 🌅 High-Velocity Market Intelligence Dashboard
+    print("📊 Synthesizing Global Executive Summary Matrix Panel...")
+    all_reports_combined = "\n\n".join(raw_reports_dump)
+    top_matrix_panel = generate_global_matrix(all_reports_combined)
+
+    final_dashboard = f"""# 🌅 High-Velocity Internship Intelligence Dashboard
 *Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*
 
 ---
 
-{"\n".join(compiled_reports)}
+## 🚨 EXECUTIVE BRIEFING MATRIX
+{top_matrix_panel}
+
+---
+
+## 💼 ACTIVE PORTFOLIO ASSESSMENTS
+{portfolio_output}
+
+## 🔬 WATCHLIST TARGET SPECTRUMS
+{watchlist_output}
 """
     
-    with open("daily_dashboard.md", "w") as f:
-        f.write(final_dashboard_content)
+    output_path = os.path.expanduser("~/Desktop/daily_dashboard.md")
+    with open(output_path, "w") as f:
+        f.write(final_dashboard)
         
-    print("\n🎯 Complete target-aware intelligence dashboard successfully generated!")
+    print(f"\n🎯 Execution Complete! Dashboard dropped cleanly onto your desktop: {output_path}")
 
 if __name__ == "__main__":
     generate_executive_dashboard()
